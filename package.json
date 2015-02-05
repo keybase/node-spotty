@@ -1,5 +1,5 @@
 {
-  "name": "lookup-tty",
+  "name": "spotty",
   "version": "1.0.0",
   "description": "Lookup the current process's TTY device",
   "main": "lib/index.js",
