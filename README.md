@@ -1,4 +1,4 @@
-# node-lookup-tty
+# node-spoTTY
 
 Get the TTY device (e.g., `/dev/pts/3`) of the current node process
 
