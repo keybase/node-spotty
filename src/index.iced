@@ -1,7 +1,15 @@
 
 fs = require 'fs'
 tty = require 'tty'
+path = require 'path'
 {make_esc} = require 'iced-error'
+
+#=======================================================
+
+stateq = (s1, s2) ->
+  for f in [ 'dev', 'rdev', 'ino' ]
+    return false unless s1[f] is s2[f]
+  return true
 
 #=======================================================
 
@@ -22,17 +30,44 @@ class TtyLookup
 
   os_check : (cb) ->
     err = null
-    unless process in [ 'darwin', 'linux' ]
+    unless process.platform in [ 'darwin', 'linux' ]
       err = new Error "can only run on Linux and OSX"
     cb err
 
+    #-------------
+
+  find_tty_in : ({dir, regex}, cb) ->
+    ret = null
+    esc = make_esc cb, "find_tty_in"
+    await fs.readdir dir, esc defer files
+    for file in files
+      if file.match regex
+        await @try_file {dir, file}, defer err, ret
+        break if ret?
+    cb null, ret
+
   #-------------
 
-  list_ttys : (cb) ->
-    esc = make_esc cb, "TtyLookup.list_ttys"
-    await @list_ttys_in "/dev", /^tty[A-Za-z0-9]$/, esc defer()
-    await @list_ttys_in "/dev/pts", /^[0-9]+$/, esc defer()
-    cb null
+  try_file : ({dir, file}, cb) ->
+    p = path.join dir, file
+    ret = null
+    await fs.stat p, defer err, stat
+    ret = p if not err? and stateq stat, @_stat
+    cb err, ret
+
+  #-------------
+
+  find_tty : (cb) ->
+    await @find_tty_in { dir : "/dev", regex : /^tty[A-Za-z0-9]+$/ }, defer err, res
+    unless res?
+      await @find_tty_in { dir : "/dev/pts", regex : /^[0-9]+$/   }, defer err, res
+    cb err, res
+
+  #-------------
+
+  stat_fd : (cb) ->
+    await fs.fstat @fd, defer err, @_stat
+    cb err
 
   #-------------
 
@@ -40,13 +75,13 @@ class TtyLookup
     esc = make_esc cb, "TtyLookup.run"
     await @assert_tty esc defer()
     await @os_check esc defer()
-    await @list_ttys esc defer()
-    await @match_our_tty esc defer res
+    await @stat_fd esc defer()
+    await @find_tty esc defer res
     cb null, res
 
 #=======================================================
 
-exports.tty = (cb) -> (new TtyLookup).run cb
+exports.tty = (cb) -> (new TtyLookup {}).run cb
 
 #=======================================================
 
